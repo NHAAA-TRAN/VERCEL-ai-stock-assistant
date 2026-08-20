@@ -20,6 +20,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Bộ nhớ đệm In-Memory Cache (TTL: 300 giây = 5 phút)
+ANALYSIS_CACHE = {}
+
 class StockRequest(BaseModel):
     symbol: str
 
@@ -42,7 +45,14 @@ def analyze_stock(req: StockRequest):
     if not api_key:
         raise HTTPException(status_code=500, detail="Chưa cấu hình GEMINI_API_KEY trên Vercel Environment Variables")
 
-    # 1. Lấy dữ liệu 6 tháng từ Yahoo Finance
+    # 1. Kiểm tra Cache trong 5 phút (Chống spam quota API)
+    now = time.time()
+    if sym in ANALYSIS_CACHE:
+        cached_data, cached_time = ANALYSIS_CACHE[sym]
+        if now - cached_time < 300:  # Dưới 5 phút trả về kết quả lưu sẵn ngay lập tức
+            return cached_data
+
+    # 2. Lấy dữ liệu 6 tháng từ Yahoo Finance
     try:
         ticker = f"{sym}.VN"
         stock = yf.Ticker(ticker)
@@ -52,7 +62,7 @@ def analyze_stock(req: StockRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi truy xuất dữ liệu: {str(e)}")
 
-    # 2. Tính toán các chỉ báo kỹ thuật định lượng
+    # 3. Tính toán các chỉ báo kỹ thuật
     df["SMA20"] = df["Close"].rolling(window=20).mean()
     df["SMA50"] = df["Close"].rolling(window=50).mean()
 
@@ -92,7 +102,7 @@ def analyze_stock(req: StockRequest):
         "future_dates": future_dates
     }
 
-    # 3. Prompt Gemini 3.6 Flash (Tối ưu hóa ngắn gọn, sinh kết quả siêu tốc)
+    # 4. Gửi sang Gemini 3.6 Flash
     gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={api_key}"
     prompt = f"""
 Bạn là Chuyên gia Tư vấn Đầu tư Chứng khoán. Phân tích mã {sym}:
@@ -100,9 +110,9 @@ Bạn là Chuyên gia Tư vấn Đầu tư Chứng khoán. Phân tích mã {sym}
 - Khối lượng: {metrics['volume']:,} CP (TB 20P: {metrics['avg_vol_20']:,} CP)
 - RSI(14): {metrics['rsi']} | SMA20: {metrics['sma20']:,.0f} | SMA50: {metrics['sma50']:,.0f}
 - Hỗ trợ: {metrics['support_20']:,.0f} | Kháng cự: {metrics['resistance_20']:,.0f}
-- Giá 10 phiên qua: {history_prices}
+- 10 phiên qua: {history_prices}
 
-Trả về DUY NHẤT 1 JSON Object (không giải thích thêm, ngắn gọn):
+Trả về DUY NHẤT 1 JSON Object:
 {{
   "action": "MUA MỚI" | "MUA GIA TĂNG" | "NẮM GIỮ" | "BÁN HẠ TỶ TRỌNG" | "BÁN CẮT LỖ" | "THEO DÕI",
   "buy_zone": "Mức giá mua tối ưu",
@@ -130,28 +140,31 @@ Trả về DUY NHẤT 1 JSON Object (không giải thích thêm, ngắn gọn):
         }
     }
 
-    # Cơ chế Retry 2 lần với Timeout 50s
-    advice = None
-    for attempt in range(2):
-        try:
-            resp = requests.post(gemini_url, json=payload, timeout=50)
-            res_json = resp.json()
-            if "error" in res_json:
-                raise Exception(res_json["error"].get("message", "Lỗi Gemini API"))
-            
-            raw_text = res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
-            clean_text = re.sub(r"^```json\s*|\s*```$", "", raw_text, flags=re.MULTILINE).strip()
-            advice = json.loads(clean_text)
-            break
-        except requests.exceptions.Timeout:
-            if attempt == 0:
-                time.sleep(1)
-                continue
-            raise HTTPException(status_code=504, detail="Máy chủ AI phản hồi quá thời gian quy định. Vui lòng bấm phân tích lại.")
-        except Exception as e:
-            if attempt == 0:
-                time.sleep(1)
-                continue
-            raise HTTPException(status_code=500, detail=f"Lỗi phân tích từ AI: {str(e)}")
+    try:
+        resp = requests.post(gemini_url, json=payload, timeout=40)
+        res_json = resp.json()
+        
+        # Bắt lỗi Quota Exceeded (HTTP 429)
+        if resp.status_code == 429 or ("error" in res_json and "quota" in res_json["error"].get("message", "").lower()):
+            raise HTTPException(
+                status_code=429, 
+                detail="⚠️ Hạn mức gọi AI miễn phí trong phút này đã đạt giới hạn. Vui lòng đợi 30 giây rồi bấm lại."
+            )
 
-    return {"metrics": metrics, "advice": advice}
+        if "error" in res_json:
+            raise HTTPException(status_code=500, detail=res_json["error"].get("message", "Lỗi Gemini API"))
+
+        raw_text = res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
+        clean_text = re.sub(r"^```json\s*|\s*```$", "", raw_text, flags=re.MULTILINE).strip()
+        advice = json.loads(clean_text)
+
+        result_payload = {"metrics": metrics, "advice": advice}
+        
+        # Lưu vào cache 5 phút
+        ANALYSIS_CACHE[sym] = (result_payload, time.time())
+        return result_payload
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi xử lý: {str(e)}")
