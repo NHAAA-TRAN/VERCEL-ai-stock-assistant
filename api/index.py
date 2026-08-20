@@ -8,7 +8,6 @@ import json
 import os
 import re
 
-# Export biến 'app' chuẩn ASGI để Vercel nhận diện
 app = FastAPI()
 
 app.add_middleware(
@@ -22,7 +21,11 @@ app.add_middleware(
 class StockRequest(BaseModel):
     symbol: str
 
+# Bắt tất cả các dạng path mà Vercel có thể chuyển tiếp
 @app.post("/api/analyze")
+@app.post("/analyze")
+@app.post("/")
+@app.post("/api/index.py")
 def analyze_stock(req: StockRequest):
     sym = req.symbol.upper().strip()
     api_key = os.environ.get("GEMINI_API_KEY")
@@ -35,11 +38,11 @@ def analyze_stock(req: StockRequest):
         stock = yf.Ticker(ticker)
         df = stock.history(period="6mo", interval="1d")
         if df is None or df.empty or len(df) < 20:
-            raise HTTPException(status_code=404, detail=f"Không tìm thấy dữ liệu cho mã '{sym}'")
+            raise HTTPException(status_code=404, detail=f"Không tìm thấy dữ liệu cho mã '{sym}' trên sàn.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi truy xuất dữ liệu: {str(e)}")
 
-    # 2. Tính toán các chỉ báo kỹ thuật định lượng
+    # 2. Tính toán chỉ báo kỹ thuật
     df["SMA20"] = df["Close"].rolling(window=20).mean()
     df["SMA50"] = df["Close"].rolling(window=50).mean()
 
