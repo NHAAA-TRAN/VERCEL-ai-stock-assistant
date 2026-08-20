@@ -7,6 +7,7 @@ import requests
 import json
 import os
 import re
+from datetime import datetime, timedelta
 
 app = FastAPI()
 
@@ -21,7 +22,16 @@ app.add_middleware(
 class StockRequest(BaseModel):
     symbol: str
 
-# Bắt tất cả các dạng path mà Vercel có thể chuyển tiếp
+def get_next_trading_days(start_date: datetime, count: int = 5):
+    """Tính danh sách ngày làm việc tiếp theo (bỏ qua T7, CN)"""
+    days = []
+    curr = start_date + timedelta(days=1)
+    while len(days) < count:
+        if curr.weekday() < 5:  # 0: Thứ 2, 4: Thứ 6
+            days.append(curr.strftime("%d/%m"))
+        curr += timedelta(days=1)
+    return days
+
 @app.post("/api/analyze")
 @app.post("/analyze")
 @app.post("/")
@@ -32,7 +42,7 @@ def analyze_stock(req: StockRequest):
     if not api_key:
         raise HTTPException(status_code=500, detail="Chưa cấu hình GEMINI_API_KEY trên Vercel Environment Variables")
 
-    # 1. Lấy dữ liệu 6 tháng từ Yahoo Finance Gateway
+    # 1. Lấy dữ liệu lịch sử từ Yahoo Finance
     try:
         ticker = f"{sym}.VN"
         stock = yf.Ticker(ticker)
@@ -58,6 +68,14 @@ def analyze_stock(req: StockRequest):
     change = curr_price - float(prev["Close"])
     pct_change = (change / float(prev["Close"])) * 100
 
+    # Lấy 10 phiên gần nhất (~2 tuần giao dịch)
+    recent_10 = df.tail(10)
+    history_dates = [pd.to_datetime(d).strftime("%d/%m") for d in recent_10.index]
+    history_prices = [round(float(p), 0) for p in recent_10["Close"]]
+
+    last_trade_date = pd.to_datetime(recent_10.index[-1]).to_pydatetime()
+    future_dates = get_next_trading_days(last_trade_date, count=5)
+
     metrics = {
         "symbol": sym,
         "current_price": curr_price,
@@ -70,9 +88,12 @@ def analyze_stock(req: StockRequest):
         "sma50": round(float(latest["SMA50"]), 0) if not pd.isna(latest["SMA50"]) else curr_price,
         "support_20": float(df["Low"].tail(20).min()),
         "resistance_20": float(df["High"].tail(20).max()),
+        "history_dates": history_dates,
+        "history_prices": history_prices,
+        "future_dates": future_dates
     }
 
-    # 3. Gửi sang Gemini 3.6 Flash
+    # 3. Prompt Gemini 3.6 Flash
     gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={api_key}"
     prompt = f"""
 Bạn là Chuyên gia Tư vấn Đầu tư Chứng khoán Cao cấp. Phân tích dữ liệu mã {sym}:
@@ -80,6 +101,11 @@ Bạn là Chuyên gia Tư vấn Đầu tư Chứng khoán Cao cấp. Phân tích
 - Khối lượng: {metrics['volume']:,} CP (TB 20P: {metrics['avg_vol_20']:,} CP)
 - RSI(14): {metrics['rsi']} | SMA20: {metrics['sma20']:,.0f} | SMA50: {metrics['sma50']:,.0f}
 - Hỗ trợ (20P): {metrics['support_20']:,.0f} VNĐ | Kháng cự (20P): {metrics['resistance_20']:,.0f} VNĐ
+- 10 phiên gần nhất: {history_prices}
+
+Nhiệm vụ:
+1. Đưa ra khuyến nghị giao dịch và xu hướng.
+2. Dự báo quỹ đạo giá kỳ vọng (5 phiên tiếp theo: {future_dates}) theo dạng số thực tế (VNĐ), bám sát biên độ biến động trần/sàn và ngưỡng kháng cự/hỗ trợ.
 
 Trả về DUY NHẤT 1 JSON Object:
 {{
@@ -91,7 +117,9 @@ Trả về DUY NHẤT 1 JSON Object:
   "trend_weekly": "TĂNG" | "GIẢM" | "TÍCH LŨY",
   "trend_monthly": "TĂNG" | "GIẢM" | "TÍCH LŨY",
   "catalysts": ["Nhận định dòng tiền", "Trạng thái kỹ thuật", "Kế hoạch đi lệnh"],
-  "capital_allocation": "Tỷ trọng giải ngân (% NAV)"
+  "capital_allocation": "Tỷ trọng giải ngân (% NAV)",
+  "predicted_5d_prices": [giá_phiên_1, giá_phiên_2, giá_phiên_3, giá_phiên_4, giá_phiên_5],
+  "prediction_comment": "Nhận xét ngắn về kịch bản đường đi của giá trong 1 tuần tới"
 }}
 """
     payload = {
