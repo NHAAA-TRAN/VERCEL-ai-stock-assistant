@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VN Stock AI Advisor</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen py-10 px-4 md:px-8">
+  <div class="max-w-5xl mx-auto">
+    <!-- Header -->
+    <div class="mb-8 text-center md:text-left">
+      <h1 class="text-3xl font-extrabold text-blue-400">📈 VN Stock AI Advisor</h1>
+      <p class="text-slate-400 text-sm mt-1">Phân tích kỹ thuật định lượng và khuyến nghị từ Gemini 3.6 Flash</p>
+    </div>
+
+    <!-- Search Bar -->
+    <div class="flex gap-3 mb-8 bg-slate-900 p-4 rounded-xl border border-slate-800 shadow-lg">
+      <input id="symbolInput" type="text" value="HPG" placeholder="Nhập mã CK (VD: HPG, SSI, FPT)..." 
+             class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-4 py-2.5 text-lg font-bold tracking-wider uppercase focus:outline-none focus:border-blue-500">
+      <button onclick="analyzeStock()" id="btnSubmit" 
+              class="bg-blue-600 hover:bg-blue-500 font-semibold px-6 py-2.5 rounded-lg transition-all flex items-center gap-2">
+        <span>🚀 Phân Tích</span>
+      </button>
+    </div>
+
+    <!-- Loading / Error Message -->
+    <div id="statusMsg" class="hidden p-4 rounded-lg mb-6 text-sm"></div>
+
+    <!-- Main Results Dashboard -->
+    <div id="resultDashboard" class="hidden space-y-6">
+      <!-- 5 Metrics Cards -->
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+          <p class="text-xs text-slate-400 font-medium">Giá Khớp Lệnh</p>
+          <p id="mPrice" class="text-xl font-bold text-slate-100 mt-1">-</p>
+          <p id="mChange" class="text-xs font-semibold mt-0.5">-</p>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+          <p class="text-xs text-slate-400 font-medium">Khối Lượng Khớp</p>
+          <p id="mVolume" class="text-xl font-bold text-slate-100 mt-1">-</p>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+          <p class="text-xs text-slate-400 font-medium">Chỉ Số RSI (14)</p>
+          <p id="mRsi" class="text-xl font-bold text-slate-100 mt-1">-</p>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+          <p class="text-xs text-slate-400 font-medium">Hỗ Trợ 20P</p>
+          <p id="mSupport" class="text-xl font-bold text-emerald-400 mt-1">-</p>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+          <p class="text-xs text-slate-400 font-medium">Kháng Cự 20P</p>
+          <p id="mResistance" class="text-xl font-bold text-rose-400 mt-1">-</p>
+        </div>
+      </div>
+
+      <!-- Action Plan Box -->
+      <div class="bg-slate-900 border border-slate-800 p-6 rounded-xl shadow-md">
+        <h3 class="text-lg font-bold text-slate-200 mb-4">🎯 Kế Hoạch Giao Dịch Khuyến Nghị</h3>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+            <span class="text-xs text-slate-400">Khuyến Nghị Hành Động</span>
+            <p id="advAction" class="text-2xl font-black mt-1 text-emerald-400">-</p>
+          </div>
+          <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+            <span class="text-xs text-slate-400">Vùng Mua Tối Ưu</span>
+            <p id="advBuy" class="text-base font-semibold text-slate-100 mt-1">-</p>
+          </div>
+          <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+            <span class="text-xs text-slate-400">Mục Tiêu Giá (Target)</span>
+            <p id="advTarget" class="text-base font-semibold text-emerald-400 mt-1">-</p>
+          </div>
+          <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+            <span class="text-xs text-slate-400">Cắt Lỗ (Stoploss)</span>
+            <p id="advStoploss" class="text-base font-semibold text-rose-400 mt-1">-</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Analysis Details -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-slate-900 border border-slate-800 p-6 rounded-xl">
+          <h4 class="text-base font-bold text-slate-200 mb-3">📊 Xu Hướng & Quản Trị Vốn</h4>
+          <ul class="space-y-2 text-sm text-slate-300">
+            <li class="flex justify-between border-b border-slate-800 py-1.5"><span>Khung ngắn hạn (Tuần):</span> <strong id="trendWeek" class="text-blue-400">-</strong></li>
+            <li class="flex justify-between border-b border-slate-800 py-1.5"><span>Khung trung hạn (Tháng):</span> <strong id="trendMonth" class="text-blue-400">-</strong></li>
+            <li class="flex justify-between border-b border-slate-800 py-1.5"><span>Tỷ lệ Risk:Reward:</span> <strong id="ratioRR" class="text-slate-100">-</strong></li>
+            <li class="flex justify-between py-1.5"><span>Tỷ trọng phân bổ đề xuất:</span> <strong id="capAlloc" class="text-slate-100">-</strong></li>
+          </ul>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 p-6 rounded-xl">
+          <h4 class="text-base font-bold text-slate-200 mb-3">💡 Luận Điểm Kỹ Thuật Chi Tiết</h4>
+          <ul id="catalystsList" class="space-y-2 text-sm text-slate-300 list-disc list-inside"></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function analyzeStock() {
+      const sym = document.getElementById('symbolInput').value.trim();
+      if (!sym) return;
+
+      const btn = document.getElementById('btnSubmit');
+      const statusMsg = document.getElementById('statusMsg');
+      const dashboard = document.getElementById('resultDashboard');
+
+      btn.disabled = true;
+      btn.innerText = "⏳ Đang phân tích...";
+      statusMsg.className = "p-4 rounded-lg mb-6 text-sm bg-blue-950/60 border border-blue-800 text-blue-200 block";
+      statusMsg.innerText = `Đang đồng bộ dữ liệu thị trường và phân tích kỹ thuật cho mã ${sym.toUpperCase()}...`;
+      dashboard.classList.add('hidden');
+
+      try {
+        const res = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ symbol: sym })
+        });
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.detail || "Có lỗi xảy ra trong quá trình phân tích.");
+
+        const { metrics, advice } = data;
+
+        // Render Metrics
+        document.getElementById('mPrice').innerText = Number(metrics.current_price).toLocaleString() + " đ";
+        const chgElem = document.getElementById('mChange');
+        chgElem.innerText = (metrics.percent_change >= 0 ? "+" : "") + metrics.percent_change.toFixed(2) + "%";
+        chgElem.className = `text-xs font-semibold mt-0.5 ${metrics.percent_change >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+        document.getElementById('mVolume').innerText = Number(metrics.volume).toLocaleString() + " CP";
+        document.getElementById('mRsi').innerText = metrics.rsi;
+        document.getElementById('mSupport').innerText = Number(metrics.support_20).toLocaleString() + " đ";
+        document.getElementById('mResistance').innerText = Number(metrics.resistance_20).toLocaleString() + " đ";
+
+        // Render Advice
+        const actElem = document.getElementById('advAction');
+        actElem.innerText = advice.action;
+        actElem.className = `text-2xl font-black mt-1 ${advice.action.includes('MUA') ? 'text-emerald-400' : advice.action.includes('BÁN') ? 'text-rose-400' : 'text-amber-400'}`;
+        document.getElementById('advBuy').innerText = advice.buy_zone;
+        document.getElementById('advTarget').innerText = advice.target_price;
+        document.getElementById('advStoploss').innerText = advice.stop_loss;
+
+        // Render Trends
+        document.getElementById('trendWeek').innerText = advice.trend_weekly;
+        document.getElementById('trendMonth').innerText = advice.trend_monthly;
+        document.getElementById('ratioRR').innerText = advice.risk_reward_ratio;
+        document.getElementById('capAlloc').innerText = advice.capital_allocation;
+
+        // Render Catalysts
+        const catList = document.getElementById('catalystsList');
+        catList.innerHTML = '';
+        (advice.catalysts || []).forEach(c => {
+          const li = document.createElement('li');
+          li.innerText = c;
+          catList.appendChild(li);
+        });
+
+        statusMsg.classList.add('hidden');
+        dashboard.classList.remove('hidden');
+      } catch (err) {
+        statusMsg.className = "p-4 rounded-lg mb-6 text-sm bg-rose-950/60 border border-rose-800 text-rose-200 block";
+        statusMsg.innerText = err.message;
+      } finally {
+        btn.disabled = false;
+        btn.innerText = "🚀 Phân Tích";
+      }
+    }
+  </script>
+</body>
+</html>
