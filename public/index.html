@@ -4,118 +4,150 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- Tiêu đề trang -->
+  <!-- Metadata & Preview -->
   <title>VN Stock AI Advisor — Tra Cứu & Tư Vấn Chứng Khoán</title>
-
-  <!-- Thẻ mô tả SEO tiêu chuẩn -->
-  <meta name="description" content="Web công cụ tra cứu mã chứng khoán, phân tích kỹ thuật định lượng và khuyến nghị điểm Mua/Bán/Cắt lỗ theo thời gian thực bằng AI Gemini.">
-
-  <!-- Open Graph Meta Tags (Hiển thị preview khi gửi link Zalo, Facebook, Telegram) -->
+  <meta name="description" content="Web công cụ tra cứu mã chứng khoán, phân tích kỹ thuật định lượng và khuyến nghị xu hướng kỹ thuật từ Gemini 3.6 Flash.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://vercel-ai-stock-assistant.vercel.app/">
   <meta property="og:title" content="VN Stock AI Advisor">
   <meta property="og:description" content="Web công cụ tra cứu mã chứng khoán và tư vấn xu hướng trading thông minh bằng AI.">
   <meta property="og:image" content="https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=1200&auto=format&fit=crop&q=80">
 
-  <!-- Twitter Card Metadata -->
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="VN Stock AI Advisor">
-  <meta name="twitter:description" content="Web công cụ tra cứu mã chứng khoán và tư vấn xu hướng trading thông minh bằng AI.">
-  <meta name="twitter:image" content="https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=1200&auto=format&fit=crop&q=80">
-
+  <!-- Tailwind CSS & Chart.js -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen py-10 px-4 md:px-8">
+<body class="bg-slate-50 text-slate-800 min-h-screen py-10 px-4 md:px-8 font-sans">
   <div class="max-w-5xl mx-auto">
-    <!-- Header -->
+    
+    <!-- Header (Light Theme) -->
     <div class="mb-8 text-center md:text-left">
-      <h1 class="text-3xl font-extrabold text-blue-400">📈 VN Stock AI Advisor</h1>
-      <p class="text-slate-400 text-sm mt-1">Phân tích kỹ thuật định lượng và khuyến nghị từ Gemini 3.6 Flash</p>
+      <div class="inline-flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold mb-2">
+        <span>⚡ AI Quant Engine</span>
+      </div>
+      <h1 class="text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight">📈 VN Stock AI Advisor</h1>
+      <p class="text-slate-500 text-sm md:text-base mt-1 font-medium">Khuyến nghị xu hướng kỹ thuật từ Gemini 3.6 Flash</p>
     </div>
 
-    <!-- Search Bar -->
-    <div class="flex gap-3 mb-8 bg-slate-900 p-4 rounded-xl border border-slate-800 shadow-lg">
+    <!-- Search Bar Card -->
+    <div class="flex flex-col sm:flex-row gap-3 mb-8 bg-white p-3 rounded-2xl border border-slate-200 shadow-sm">
       <input id="symbolInput" type="text" value="HPG" placeholder="Nhập mã CK (VD: HPG, SSI, STB)..." 
-             class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-4 py-2.5 text-lg font-bold tracking-wider uppercase focus:outline-none focus:border-blue-500">
+             class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-lg font-bold tracking-wider uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all">
       <button onclick="analyzeStock()" id="btnSubmit" 
-              class="bg-blue-600 hover:bg-blue-500 font-semibold px-6 py-2.5 rounded-lg transition-all flex items-center gap-2">
+              class="bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-semibold px-8 py-3 rounded-xl transition-all shadow-md shadow-blue-500/20 flex items-center justify-center gap-2">
         <span>🚀 Phân Tích</span>
       </button>
     </div>
 
-    <!-- Loading / Error Message -->
-    <div id="statusMsg" class="hidden p-4 rounded-lg mb-6 text-sm"></div>
+    <!-- Loading / Status Alert -->
+    <div id="statusMsg" class="hidden p-4 rounded-xl mb-6 text-sm font-medium"></div>
 
-    <!-- Main Results Dashboard -->
+    <!-- Dashboard Content -->
     <div id="resultDashboard" class="hidden space-y-6">
-      <!-- 5 Metrics Cards -->
+      
+      <!-- Top 5 Key Metric Cards -->
       <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-          <p class="text-xs text-slate-400 font-medium">Giá Khớp Lệnh</p>
-          <p id="mPrice" class="text-xl font-bold text-slate-100 mt-1">-</p>
-          <p id="mChange" class="text-xs font-semibold mt-0.5">-</p>
+        <div class="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm">
+          <p class="text-xs text-slate-500 font-semibold uppercase tracking-wider">Giá Khớp Lệnh</p>
+          <p id="mPrice" class="text-xl font-extrabold text-slate-900 mt-1">-</p>
+          <p id="mChange" class="text-xs font-bold mt-0.5">-</p>
         </div>
-        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-          <p class="text-xs text-slate-400 font-medium">Khối Lượng Khớp</p>
-          <p id="mVolume" class="text-xl font-bold text-slate-100 mt-1">-</p>
+        <div class="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm">
+          <p class="text-xs text-slate-500 font-semibold uppercase tracking-wider">Khối Lượng Khớp</p>
+          <p id="mVolume" class="text-xl font-extrabold text-slate-900 mt-1">-</p>
         </div>
-        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-          <p class="text-xs text-slate-400 font-medium">Chỉ Số RSI (14)</p>
-          <p id="mRsi" class="text-xl font-bold text-slate-100 mt-1">-</p>
+        <div class="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm">
+          <p class="text-xs text-slate-500 font-semibold uppercase tracking-wider">Chỉ Số RSI (14)</p>
+          <p id="mRsi" class="text-xl font-extrabold text-slate-900 mt-1">-</p>
         </div>
-        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-          <p class="text-xs text-slate-400 font-medium">Hỗ Trợ 20P</p>
-          <p id="mSupport" class="text-xl font-bold text-emerald-400 mt-1">-</p>
+        <div class="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm">
+          <p class="text-xs text-slate-500 font-semibold uppercase tracking-wider">Hỗ Trợ 20P</p>
+          <p id="mSupport" class="text-xl font-extrabold text-emerald-600 mt-1">-</p>
         </div>
-        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-          <p class="text-xs text-slate-400 font-medium">Kháng Cự 20P</p>
-          <p id="mResistance" class="text-xl font-bold text-rose-400 mt-1">-</p>
-        </div>
-      </div>
-
-      <!-- Action Plan Box -->
-      <div class="bg-slate-900 border border-slate-800 p-6 rounded-xl shadow-md">
-        <h3 class="text-lg font-bold text-slate-200 mb-4">🎯 Kế Hoạch Giao Dịch Khuyến Nghị</h3>
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
-            <span class="text-xs text-slate-400">Khuyến Nghị Hành Động</span>
-            <p id="advAction" class="text-2xl font-black mt-1 text-emerald-400">-</p>
-          </div>
-          <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
-            <span class="text-xs text-slate-400">Vùng Mua Tối Ưu</span>
-            <p id="advBuy" class="text-base font-semibold text-slate-100 mt-1">-</p>
-          </div>
-          <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
-            <span class="text-xs text-slate-400">Mục Tiêu Giá (Target)</span>
-            <p id="advTarget" class="text-base font-semibold text-emerald-400 mt-1">-</p>
-          </div>
-          <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
-            <span class="text-xs text-slate-400">Cắt Lỗ (Stoploss)</span>
-            <p id="advStoploss" class="text-base font-semibold text-rose-400 mt-1">-</p>
-          </div>
+        <div class="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm">
+          <p class="text-xs text-slate-500 font-semibold uppercase tracking-wider">Kháng Cự 20P</p>
+          <p id="mResistance" class="text-xl font-extrabold text-rose-600 mt-1">-</p>
         </div>
       </div>
 
-      <!-- Analysis Details -->
+      <!-- Action Plan Card -->
+      <div class="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+        <h3 class="text-base font-bold text-slate-900 mb-4 flex items-center gap-2">
+          <span>🎯 Kế Hoạch Giao Dịch Đề Xuất</span>
+        </h3>
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="p-4 bg-slate-50 rounded-xl border border-slate-100">
+            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Khuyến Nghị Hành Động</span>
+            <p id="advAction" class="text-2xl font-black mt-1 text-emerald-600">-</p>
+          </div>
+          <div class="p-4 bg-slate-50 rounded-xl border border-slate-100">
+            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Vùng Mua Tối Ưu</span>
+            <p id="advBuy" class="text-base font-bold text-slate-800 mt-1">-</p>
+          </div>
+          <div class="p-4 bg-slate-50 rounded-xl border border-slate-100">
+            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Mục Tiêu Giá (Target)</span>
+            <p id="advTarget" class="text-base font-bold text-emerald-600 mt-1">-</p>
+          </div>
+          <div class="p-4 bg-slate-50 rounded-xl border border-slate-100">
+            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Cắt Lỗ (Stoploss)</span>
+            <p id="advStoploss" class="text-base font-bold text-rose-600 mt-1">-</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- NEW FEATURE: Unified Chart (2-Week Actual + 1-Week AI Prediction) -->
+      <div class="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-4">
+          <div>
+            <h3 class="text-base font-bold text-slate-900">📊 Biểu Đồ Giá Thực Tế (2 Tuần) & Dự Báo AI (1 Tuần Tới)</h3>
+            <p id="predictionComment" class="text-xs text-slate-500 mt-1 font-medium italic"></p>
+          </div>
+          <div class="flex items-center gap-4 text-xs font-semibold">
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-blue-600 inline-block"></span> Giá Thực Tế</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-amber-500 inline-block"></span> AI Dự Báo (T+1 đến T+5)</span>
+          </div>
+        </div>
+        <div class="relative h-72 md:h-80 w-full">
+          <canvas id="stockPredictionChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Detail Analysis & Breakdown -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div class="bg-slate-900 border border-slate-800 p-6 rounded-xl">
-          <h4 class="text-base font-bold text-slate-200 mb-3">📊 Xu Hướng & Quản Trị Vốn</h4>
-          <ul class="space-y-2 text-sm text-slate-300">
-            <li class="flex justify-between border-b border-slate-800 py-1.5"><span>Khung ngắn hạn (Tuần):</span> <strong id="trendWeek" class="text-blue-400">-</strong></li>
-            <li class="flex justify-between border-b border-slate-800 py-1.5"><span>Khung trung hạn (Tháng):</span> <strong id="trendMonth" class="text-blue-400">-</strong></li>
-            <li class="flex justify-between border-b border-slate-800 py-1.5"><span>Tỷ lệ Risk:Reward:</span> <strong id="ratioRR" class="text-slate-100">-</strong></li>
-            <li class="flex justify-between py-1.5"><span>Tỷ trọng phân bổ đề xuất:</span> <strong id="capAlloc" class="text-slate-100">-</strong></li>
+        <div class="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+          <h4 class="text-base font-bold text-slate-900 mb-3">📈 Xu Hướng & Quản Trị Vốn</h4>
+          <ul class="space-y-2 text-sm text-slate-700">
+            <li class="flex justify-between border-b border-slate-100 py-2">
+              <span class="text-slate-500">Khung ngắn hạn (Tuần):</span> 
+              <strong id="trendWeek" class="text-blue-600 font-bold">-</strong>
+            </li>
+            <li class="flex justify-between border-b border-slate-100 py-2">
+              <span class="text-slate-500">Khung trung hạn (Tháng):</span> 
+              <strong id="trendMonth" class="text-blue-600 font-bold">-</strong>
+            </li>
+            <li class="flex justify-between border-b border-slate-100 py-2">
+              <span class="text-slate-500">Tỷ lệ Risk : Reward:</span> 
+              <strong id="ratioRR" class="text-slate-800 font-bold">-</strong>
+            </li>
+            <li class="flex justify-between py-2">
+              <span class="text-slate-500">Tỷ trọng giải ngân đề xuất:</span> 
+              <strong id="capAlloc" class="text-slate-800 font-bold">-</strong>
+            </li>
           </ul>
         </div>
-        <div class="bg-slate-900 border border-slate-800 p-6 rounded-xl">
-          <h4 class="text-base font-bold text-slate-200 mb-3">💡 Luận Điểm Kỹ Thuật Chi Tiết</h4>
-          <ul id="catalystsList" class="space-y-2 text-sm text-slate-300 list-disc list-inside"></ul>
+
+        <div class="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+          <h4 class="text-base font-bold text-slate-900 mb-3">💡 Luận Điểm Kỹ Thuật Chi Tiết</h4>
+          <ul id="catalystsList" class="space-y-2.5 text-sm text-slate-700 list-disc list-inside leading-relaxed"></ul>
         </div>
       </div>
+
     </div>
   </div>
 
   <script>
+    let chartInstance = null;
+
     async function analyzeStock() {
       const sym = document.getElementById('symbolInput').value.trim();
       if (!sym) return;
@@ -126,7 +158,7 @@
 
       btn.disabled = true;
       btn.innerText = "⏳ Đang phân tích...";
-      statusMsg.className = "p-4 rounded-lg mb-6 text-sm bg-blue-950/60 border border-blue-800 text-blue-200 block";
+      statusMsg.className = "p-4 rounded-xl mb-6 text-sm bg-blue-50 border border-blue-200 text-blue-800 block";
       statusMsg.innerText = `Đang đồng bộ dữ liệu thị trường và phân tích kỹ thuật cho mã ${sym.toUpperCase()}...`;
       dashboard.classList.add('hidden');
 
@@ -142,31 +174,31 @@
 
         const { metrics, advice } = data;
 
-        // Render Metrics
+        // 1. Render Metrics
         document.getElementById('mPrice').innerText = Number(metrics.current_price).toLocaleString() + " đ";
         const chgElem = document.getElementById('mChange');
         chgElem.innerText = (metrics.percent_change >= 0 ? "+" : "") + metrics.percent_change.toFixed(2) + "%";
-        chgElem.className = `text-xs font-semibold mt-0.5 ${metrics.percent_change >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+        chgElem.className = `text-xs font-bold mt-0.5 ${metrics.percent_change >= 0 ? 'text-emerald-600' : 'text-rose-600'}`;
         document.getElementById('mVolume').innerText = Number(metrics.volume).toLocaleString() + " CP";
         document.getElementById('mRsi').innerText = metrics.rsi;
         document.getElementById('mSupport').innerText = Number(metrics.support_20).toLocaleString() + " đ";
         document.getElementById('mResistance').innerText = Number(metrics.resistance_20).toLocaleString() + " đ";
 
-        // Render Advice
+        // 2. Render Advice Plan
         const actElem = document.getElementById('advAction');
         actElem.innerText = advice.action;
-        actElem.className = `text-2xl font-black mt-1 ${advice.action.includes('MUA') ? 'text-emerald-400' : advice.action.includes('BÁN') ? 'text-rose-400' : 'text-amber-400'}`;
+        actElem.className = `text-2xl font-black mt-1 ${advice.action.includes('MUA') ? 'text-emerald-600' : advice.action.includes('BÁN') ? 'text-rose-600' : 'text-amber-600'}`;
         document.getElementById('advBuy').innerText = advice.buy_zone;
         document.getElementById('advTarget').innerText = advice.target_price;
         document.getElementById('advStoploss').innerText = advice.stop_loss;
 
-        // Render Trends
+        // 3. Render Trend & Allocation
         document.getElementById('trendWeek').innerText = advice.trend_weekly;
         document.getElementById('trendMonth').innerText = advice.trend_monthly;
         document.getElementById('ratioRR').innerText = advice.risk_reward_ratio;
         document.getElementById('capAlloc').innerText = advice.capital_allocation;
 
-        // Render Catalysts
+        // 4. Render Catalysts
         const catList = document.getElementById('catalystsList');
         catList.innerHTML = '';
         (advice.catalysts || []).forEach(c => {
@@ -175,15 +207,107 @@
           catList.appendChild(li);
         });
 
+        // 5. Render Unified Chart (2w Actual + 1w AI Prediction)
+        document.getElementById('predictionComment').innerText = advice.prediction_comment ? `Nhận định: ${advice.prediction_comment}` : '';
+        renderUnifiedChart(metrics, advice);
+
         statusMsg.classList.add('hidden');
         dashboard.classList.remove('hidden');
       } catch (err) {
-        statusMsg.className = "p-4 rounded-lg mb-6 text-sm bg-rose-950/60 border border-rose-800 text-rose-200 block";
+        statusMsg.className = "p-4 rounded-xl mb-6 text-sm bg-rose-50 border border-rose-200 text-rose-800 block";
         statusMsg.innerText = err.message;
       } finally {
         btn.disabled = false;
         btn.innerText = "🚀 Phân Tích";
       }
+    }
+
+    function renderUnifiedChart(metrics, advice) {
+      const ctx = document.getElementById('stockPredictionChart').getContext('2d');
+      
+      const histDates = metrics.history_dates || [];
+      const histPrices = metrics.history_prices || [];
+      const futureDates = metrics.future_dates || [];
+      const predPrices = advice.predicted_5d_prices || [];
+
+      // Nhãn trục hoành X = Ngày thực tế + Ngày tương lai
+      const labels = [...histDates, ...futureDates];
+
+      // Dữ liệu đường giá thực (Đoạn tương lai điền null)
+      const actualSeries = [...histPrices, ...new Array(futureDates.length).fill(null)];
+
+      // Dữ liệu đường dự báo (Đoạn quá khứ điền null, nối từ điểm giá cuối cùng của thực tế)
+      const predictedSeries = new Array(histDates.length - 1).fill(null);
+      if (histPrices.length > 0) {
+        predictedSeries.push(histPrices[histPrices.length - 1]); // Điểm neo nối liền
+      }
+      predictedSeries.push(...predPrices);
+
+      if (chartInstance) {
+        chartInstance.destroy();
+      }
+
+      chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Giá Thực Tế',
+              data: actualSeries,
+              borderColor: '#2563eb',
+              backgroundColor: 'rgba(37, 99, 235, 0.08)',
+              fill: true,
+              tension: 0.25,
+              borderWidth: 2.5,
+              pointRadius: 4,
+              pointBackgroundColor: '#2563eb'
+            },
+            {
+              label: 'AI Dự Báo (1 Tuần)',
+              data: predictedSeries,
+              borderColor: '#f59e0b',
+              backgroundColor: 'rgba(245, 158, 11, 0.08)',
+              borderDash: [5, 5],
+              fill: true,
+              tension: 0.25,
+              borderWidth: 2.5,
+              pointRadius: 4,
+              pointBackgroundColor: '#f59e0b'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { intersect: false, mode: 'index' },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  const val = context.raw;
+                  return val !== null ? ` ${context.dataset.label}: ${Number(val).toLocaleString()} đ` : '';
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { color: '#f1f5f9' },
+              ticks: { font: { size: 11 }, color: '#64748b' }
+            },
+            y: {
+              grid: { color: '#f1f5f9' },
+              ticks: {
+                font: { size: 11 },
+                color: '#64748b',
+                callback: function(val) { return Number(val).toLocaleString() + ' đ'; }
+              }
+            }
+          }
+        }
+      });
     }
   </script>
 </body>
