@@ -7,6 +7,7 @@ import requests
 import json
 import os
 import re
+import time
 from datetime import datetime, timedelta
 
 app = FastAPI()
@@ -23,11 +24,10 @@ class StockRequest(BaseModel):
     symbol: str
 
 def get_next_trading_days(start_date: datetime, count: int = 5):
-    """Tính danh sách ngày làm việc tiếp theo (bỏ qua T7, CN)"""
     days = []
     curr = start_date + timedelta(days=1)
     while len(days) < count:
-        if curr.weekday() < 5:  # 0: Thứ 2, 4: Thứ 6
+        if curr.weekday() < 5:
             days.append(curr.strftime("%d/%m"))
         curr += timedelta(days=1)
     return days
@@ -42,17 +42,17 @@ def analyze_stock(req: StockRequest):
     if not api_key:
         raise HTTPException(status_code=500, detail="Chưa cấu hình GEMINI_API_KEY trên Vercel Environment Variables")
 
-    # 1. Lấy dữ liệu lịch sử từ Yahoo Finance
+    # 1. Lấy dữ liệu 6 tháng từ Yahoo Finance
     try:
         ticker = f"{sym}.VN"
         stock = yf.Ticker(ticker)
         df = stock.history(period="6mo", interval="1d")
         if df is None or df.empty or len(df) < 20:
-            raise HTTPException(status_code=404, detail=f"Không tìm thấy dữ liệu cho mã '{sym}' trên sàn.")
+            raise HTTPException(status_code=404, detail=f"Không tìm thấy dữ liệu cho mã '{sym}'. Vui lòng kiểm tra lại mã cổ phiếu.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi truy xuất dữ liệu: {str(e)}")
 
-    # 2. Tính toán chỉ báo kỹ thuật
+    # 2. Tính toán các chỉ báo kỹ thuật định lượng
     df["SMA20"] = df["Close"].rolling(window=20).mean()
     df["SMA50"] = df["Close"].rolling(window=50).mean()
 
@@ -68,7 +68,6 @@ def analyze_stock(req: StockRequest):
     change = curr_price - float(prev["Close"])
     pct_change = (change / float(prev["Close"])) * 100
 
-    # Lấy 10 phiên gần nhất (~2 tuần giao dịch)
     recent_10 = df.tail(10)
     history_dates = [pd.to_datetime(d).strftime("%d/%m") for d in recent_10.index]
     history_prices = [round(float(p), 0) for p in recent_10["Close"]]
@@ -93,48 +92,66 @@ def analyze_stock(req: StockRequest):
         "future_dates": future_dates
     }
 
-    # 3. Prompt Gemini 3.6 Flash
+    # 3. Prompt Gemini 3.6 Flash (Tối ưu hóa ngắn gọn, sinh kết quả siêu tốc)
     gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={api_key}"
     prompt = f"""
-Bạn là Chuyên gia Tư vấn Đầu tư Chứng khoán Cao cấp. Phân tích dữ liệu mã {sym}:
-- Giá hiện tại: {metrics['current_price']:,.0f} VNĐ ({metrics['percent_change']:+.2f}%)
+Bạn là Chuyên gia Tư vấn Đầu tư Chứng khoán. Phân tích mã {sym}:
+- Giá: {metrics['current_price']:,.0f} VNĐ ({metrics['percent_change']:+.2f}%)
 - Khối lượng: {metrics['volume']:,} CP (TB 20P: {metrics['avg_vol_20']:,} CP)
 - RSI(14): {metrics['rsi']} | SMA20: {metrics['sma20']:,.0f} | SMA50: {metrics['sma50']:,.0f}
-- Hỗ trợ (20P): {metrics['support_20']:,.0f} VNĐ | Kháng cự (20P): {metrics['resistance_20']:,.0f} VNĐ
-- 10 phiên gần nhất: {history_prices}
+- Hỗ trợ: {metrics['support_20']:,.0f} | Kháng cự: {metrics['resistance_20']:,.0f}
+- Giá 10 phiên qua: {history_prices}
 
-Nhiệm vụ:
-1. Đưa ra khuyến nghị giao dịch và xu hướng.
-2. Dự báo quỹ đạo giá kỳ vọng (5 phiên tiếp theo: {future_dates}) theo dạng số thực tế (VNĐ), bám sát biên độ biến động trần/sàn và ngưỡng kháng cự/hỗ trợ.
-
-Trả về DUY NHẤT 1 JSON Object:
+Trả về DUY NHẤT 1 JSON Object (không giải thích thêm, ngắn gọn):
 {{
   "action": "MUA MỚI" | "MUA GIA TĂNG" | "NẮM GIỮ" | "BÁN HẠ TỶ TRỌNG" | "BÁN CẮT LỖ" | "THEO DÕI",
-  "buy_zone": "Mức giá mua tối ưu (VNĐ)",
-  "target_price": "Mục tiêu giá ngắn hạn",
+  "buy_zone": "Mức giá mua tối ưu",
+  "target_price": "Mục tiêu giá",
   "stop_loss": "Mức giá cắt lỗ",
   "risk_reward_ratio": "Tỷ lệ R:R",
   "trend_weekly": "TĂNG" | "GIẢM" | "TÍCH LŨY",
   "trend_monthly": "TĂNG" | "GIẢM" | "TÍCH LŨY",
-  "catalysts": ["Nhận định dòng tiền", "Trạng thái kỹ thuật", "Kế hoạch đi lệnh"],
+  "catalysts": [
+    "Nhận xét dòng tiền & khối lượng",
+    "Nhận xét RSI và MA",
+    "Chiến lược giao dịch đề xuất"
+  ],
   "capital_allocation": "Tỷ trọng giải ngân (% NAV)",
-  "predicted_5d_prices": [giá_phiên_1, giá_phiên_2, giá_phiên_3, giá_phiên_4, giá_phiên_5],
-  "prediction_comment": "Nhận xét ngắn về kịch bản đường đi của giá trong 1 tuần tới"
+  "predicted_5d_prices": [giá_T1, giá_T2, giá_T3, giá_T4, giá_T5],
+  "prediction_comment": "Nhận xét ngắn về đường đi của giá 5 phiên tới"
 }}
 """
     payload = {
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.1, "response_mime_type": "application/json"}
+        "generationConfig": {
+            "temperature": 0.1,
+            "maxOutputTokens": 800,
+            "response_mime_type": "application/json"
+        }
     }
 
-    try:
-        resp = requests.post(gemini_url, json=payload, timeout=45).json()
-        if "error" in resp:
-            raise Exception(resp["error"].get("message", "Lỗi Gemini API"))
-        raw_text = resp["candidates"][0]["content"]["parts"][0]["text"].strip()
-        clean_text = re.sub(r"^```json\s*|\s*```$", "", raw_text, flags=re.MULTILINE).strip()
-        advice = json.loads(clean_text)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Lỗi xử lý AI: {str(e)}")
+    # Cơ chế Retry 2 lần với Timeout 50s
+    advice = None
+    for attempt in range(2):
+        try:
+            resp = requests.post(gemini_url, json=payload, timeout=50)
+            res_json = resp.json()
+            if "error" in res_json:
+                raise Exception(res_json["error"].get("message", "Lỗi Gemini API"))
+            
+            raw_text = res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
+            clean_text = re.sub(r"^```json\s*|\s*```$", "", raw_text, flags=re.MULTILINE).strip()
+            advice = json.loads(clean_text)
+            break
+        except requests.exceptions.Timeout:
+            if attempt == 0:
+                time.sleep(1)
+                continue
+            raise HTTPException(status_code=504, detail="Máy chủ AI phản hồi quá thời gian quy định. Vui lòng bấm phân tích lại.")
+        except Exception as e:
+            if attempt == 0:
+                time.sleep(1)
+                continue
+            raise HTTPException(status_code=500, detail=f"Lỗi phân tích từ AI: {str(e)}")
 
     return {"metrics": metrics, "advice": advice}
