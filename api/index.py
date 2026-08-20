@@ -20,7 +20,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Bộ nhớ đệm In-Memory Cache (TTL: 300 giây = 5 phút)
 ANALYSIS_CACHE = {}
 
 class StockRequest(BaseModel):
@@ -45,11 +44,11 @@ def analyze_stock(req: StockRequest):
     if not api_key:
         raise HTTPException(status_code=500, detail="Chưa cấu hình GEMINI_API_KEY trên Vercel Environment Variables")
 
-    # 1. Kiểm tra Cache trong 5 phút (Chống spam quota API)
+    # 1. Kiểm tra Cache trong 5 phút
     now = time.time()
     if sym in ANALYSIS_CACHE:
         cached_data, cached_time = ANALYSIS_CACHE[sym]
-        if now - cached_time < 300:  # Dưới 5 phút trả về kết quả lưu sẵn ngay lập tức
+        if now - cached_time < 300:
             return cached_data
 
     # 2. Lấy dữ liệu 6 tháng từ Yahoo Finance
@@ -62,7 +61,7 @@ def analyze_stock(req: StockRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi truy xuất dữ liệu: {str(e)}")
 
-    # 3. Tính toán các chỉ báo kỹ thuật
+    # 3. Tính toán chỉ báo kỹ thuật
     df["SMA20"] = df["Close"].rolling(window=20).mean()
     df["SMA50"] = df["Close"].rolling(window=50).mean()
 
@@ -112,7 +111,7 @@ Bạn là Chuyên gia Tư vấn Đầu tư Chứng khoán. Phân tích mã {sym}
 - Hỗ trợ: {metrics['support_20']:,.0f} | Kháng cự: {metrics['resistance_20']:,.0f}
 - 10 phiên qua: {history_prices}
 
-Trả về DUY NHẤT 1 JSON Object:
+Trả về DUY NHẤT 1 JSON Object đầy đủ:
 {{
   "action": "MUA MỚI" | "MUA GIA TĂNG" | "NẮM GIỮ" | "BÁN HẠ TỶ TRỌNG" | "BÁN CẮT LỖ" | "THEO DÕI",
   "buy_zone": "Mức giá mua tối ưu",
@@ -135,20 +134,19 @@ Trả về DUY NHẤT 1 JSON Object:
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
         "generationConfig": {
             "temperature": 0.1,
-            "maxOutputTokens": 800,
+            "maxOutputTokens": 2048,
             "response_mime_type": "application/json"
         }
     }
 
     try:
-        resp = requests.post(gemini_url, json=payload, timeout=40)
+        resp = requests.post(gemini_url, json=payload, timeout=45)
         res_json = resp.json()
         
-        # Bắt lỗi Quota Exceeded (HTTP 429)
         if resp.status_code == 429 or ("error" in res_json and "quota" in res_json["error"].get("message", "").lower()):
             raise HTTPException(
                 status_code=429, 
-                detail="⚠️ Hạn mức gọi AI miễn phí trong phút này đã đạt giới hạn. Vui lòng đợi 30 giây rồi bấm lại."
+                detail="⚠️ Hạn mức gọi AI trong phút này đã đạt giới hạn. Vui lòng đợi 30 giây rồi thử lại."
             )
 
         if "error" in res_json:
@@ -159,11 +157,11 @@ Trả về DUY NHẤT 1 JSON Object:
         advice = json.loads(clean_text)
 
         result_payload = {"metrics": metrics, "advice": advice}
-        
-        # Lưu vào cache 5 phút
         ANALYSIS_CACHE[sym] = (result_payload, time.time())
         return result_payload
 
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Phản hồi từ AI bị gián đoạn cú pháp. Vui lòng bấm phân tích lại.")
     except HTTPException:
         raise
     except Exception as e:
